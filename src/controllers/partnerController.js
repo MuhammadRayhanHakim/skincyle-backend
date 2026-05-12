@@ -1,15 +1,13 @@
 const {
   Stakeholder,
   Produk,
-  VoucherReward,
-  RedeemTransaction,
   Profil,
-  RiwayatPoin,
-  sequelize, // Import sequelize untuk fitur Transaction
+  RiwayatSaldo, // Gunakan model RiwayatSaldo yang baru
+  sequelize,
 } = require("../models");
-const { v4: uuidv4 } = require("uuid");
 
 // 1. Ambil semua Brand Partner & Katalog Produknya
+// Berguna untuk menampilkan daftar produk di marketplace SkinCycle
 exports.getPartners = async (req, res) => {
   try {
     const partners = await Stakeholder.findAll({
@@ -21,112 +19,85 @@ exports.getPartners = async (req, res) => {
   }
 };
 
-// 2. Ambil Daftar Voucher yang tersedia
-exports.getRewards = async (req, res) => {
-  try {
-    const rewards = await VoucherReward.findAll({
-      include: [
-        { model: Stakeholder, attributes: ["nama_brand", "logo_brand"] },
-      ],
-    });
-    res.status(200).json({ status: "success", data: rewards });
-  } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
-  }
-};
-
-// 3. LOGIKA INTI: Tukar Poin (Redeem Voucher) dengan Transaction
-exports.redeemVoucher = async (req, res) => {
-  // Gunakan Transaction agar jika salah satu gagal, semua dibatalkan (Data Integrity)
+// 2. LOGIKA INTI: Pembelian Produk & Potong Saldo Otomatis
+exports.checkoutProduk = async (req, res) => {
   const t = await sequelize.transaction();
 
   try {
-    const { id_voucher } = req.body;
+    const { id_produk, jumlah_beli } = req.body;
     const id_profil = req.user.id_profil;
 
-    // 1. Cek validitas voucher
-    const voucher = await VoucherReward.findByPk(id_voucher);
-    if (!voucher) {
-      return res.status(404).json({ message: "Voucher tidak ditemukan" });
+    // 1. Cari data produk dan profil user
+    const produk = await Produk.findByPk(id_produk);
+    if (!produk) {
+      return res.status(404).json({ message: "Produk tidak ditemukan" });
     }
 
-    // 2. Cek poin user
     const userProfil = await Profil.findByPk(id_profil);
-    if (userProfil.total_poin < voucher.poin_dibutuhkan) {
-      await t.rollback();
-      return res.status(400).json({
-        status: "fail",
-        message: `Poin tidak cukup. Butuh ${voucher.poin_dibutuhkan} poin.`,
-      });
+
+    // 2. Hitung Total Harga
+    const totalHargaAsli = produk.harga * (jumlah_beli || 1);
+
+    // 3. Kalkulasi Potongan Saldo
+    // Jika saldo user > 0, gunakan saldo untuk memotong harga
+    let potonganSaldo = 0;
+    if (userProfil.total_saldo > 0) {
+      // Gunakan semua saldo jika saldo < total harga,
+      // atau gunakan sebagian saldo jika saldo > total harga
+      potonganSaldo = Math.min(userProfil.total_saldo, totalHargaAsli);
     }
 
-    // 3. Eksekusi Perubahan Data (Atomic Operation)
+    const hargaAkhir = totalHargaAsli - potonganSaldo;
 
-    // Kurangi poin
-    await userProfil.decrement("total_poin", {
-      by: voucher.poin_dibutuhkan,
-      transaction: t,
-    });
+    // 4. Eksekusi Perubahan Saldo (Atomic Operation)
+    if (potonganSaldo > 0) {
+      // Kurangi saldo di tabel Profil
+      await userProfil.decrement("total_saldo", {
+        by: potonganSaldo,
+        transaction: t,
+      });
 
-    // Generate kode unik yang lebih profesional dengan UUID (diambil 8 digit terakhir)
-    const kodeUnik = `SKIN-${uuidv4().split("-")[0].toUpperCase()}`;
-
-    // Simpan transaksi redeem
-    const transaksi = await RedeemTransaction.create(
-      {
-        id_profil,
-        id_voucher,
-        kode_unik_redeem: kodeUnik,
-        status_pakai: false,
-      },
-      { transaction: t },
-    );
-
-    // Catat riwayat poin
-    await RiwayatPoin.create(
-      {
-        id_profil,
-        jumlah_poin: -voucher.poin_dibutuhkan,
-        keterangan: `Tukar Voucher: ${voucher.nama_voucher}`,
-      },
-      { transaction: t },
-    );
+      // Catat riwayat saldo sebagai transaksi "keluar"
+      await RiwayatSaldo.create(
+        {
+          id_profil,
+          aktivitas: `Potongan Harga: ${produk.nama_produk}`,
+          jumlah_saldo: potonganSaldo,
+          tipe_transaksi: "keluar",
+          tanggal: new Date(),
+        },
+        { transaction: t },
+      );
+    }
 
     // Jika sampai sini tidak ada error, simpan semua ke Database
     await t.commit();
 
-    res.status(201).json({
+    res.status(200).json({
       status: "success",
-      message: "Voucher berhasil ditukarkan!",
+      message: "Pembelian berhasil diproses dengan potongan saldo",
       data: {
-        kode_voucher: kodeUnik,
-        sisa_poin: userProfil.total_poin - voucher.poin_dibutuhkan,
+        nama_produk: produk.nama_produk,
+        total_belanja: totalHargaAsli,
+        potongan_saldo: potonganSaldo,
+        sisa_bayar_tunai: hargaAkhir,
+        sisa_saldo_user: userProfil.total_saldo - potonganSaldo,
       },
     });
   } catch (error) {
-    // Jika ada error di tengah jalan, batalkan semua perubahan poin
     await t.rollback();
     res.status(500).json({ status: "error", message: error.message });
   }
 };
 
-// 4. API Tambahan: Ambil Voucher Saya (Untuk Riwayat di React)
-exports.getMyVouchers = async (req, res) => {
+// 3. Ambil Detail Satu Produk (Optional)
+exports.getProdukDetail = async (req, res) => {
   try {
-    const id_profil = req.user.id_profil;
-    const myVouchers = await RedeemTransaction.findAll({
-      where: { id_profil },
-      include: [
-        {
-          model: VoucherReward,
-          include: [
-            { model: Stakeholder, attributes: ["nama_brand", "logo_brand"] },
-          ],
-        },
-      ],
-      order: [["createdAt", "DESC"]],
+    const { id } = req.params;
+    const produk = await Produk.findByPk(id, {
+      include: [Stakeholder],
     });
-    res.status(200).json({ status: "success", data: myVouchers });
+    res.status(200).json({ status: "success", data: produk });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }

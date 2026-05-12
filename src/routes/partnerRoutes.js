@@ -3,12 +3,14 @@ const router = express.Router();
 const partnerController = require("../controllers/partnerController");
 const authMiddleware = require("../middleware/authMiddleware");
 
-// Publik (Bisa dilihat tanpa login)
+// 1. Publik: Melihat semua Brand & Katalog Produknya
 router.get("/list", partnerController.getPartners);
-router.get("/rewards", partnerController.getRewards);
-// Tambahkan baris ini di bawah route redeem
-router.get("/my-vouchers", authMiddleware, partnerController.getMyVouchers);
-// Privat (Harus Login untuk tukar poin)
-router.post("/redeem", authMiddleware, partnerController.redeemVoucher);
+
+// 2. Publik: Melihat detail satu produk (jika fungsi getProdukDetail sudah dibuat)
+router.get("/produk/:id", partnerController.getProdukDetail);
+
+// 3. Privat: Checkout produk dengan potongan saldo otomatis
+// Ganti /redeem menjadi /checkout agar sesuai dengan alur baru
+router.post("/checkout", authMiddleware, partnerController.checkoutProduk);
 
 module.exports = router;

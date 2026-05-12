@@ -3,21 +3,19 @@ const router = express.Router();
 const forumController = require("../controllers/forumController");
 const authMiddleware = require("../middleware/authMiddleware");
 
-// --- SEMUA RUTE DI BAWAH INI WAJIB LOGIN ---
+// 1. Rute Public (Bisa diakses tanpa login)
+router.get("/", forumController.getPosts);
+router.get("/:id_posting", forumController.getPostDetail);
 
-// 1. Melihat semua postingan (Sekarang wajib login)
-router.get("/", authMiddleware, forumController.getPosts);
+// --- PROTECTED ROUTES (Hanya untuk yang sudah login) ---
+router.use(authMiddleware);
 
-// 2. Melihat detail postingan (Sekarang wajib login)
-router.get("/:id_posting", authMiddleware, forumController.getPostDetail);
-
-// 3. Membuat postingan baru
-router.post("/create", authMiddleware, forumController.createPost);
-
-// 4. Menambahkan komentar
-router.post("/:id_posting/comment", authMiddleware, forumController.addComment);
-
-// 5. Menghapus postingan
-router.delete("/:id_posting", authMiddleware, forumController.deletePost);
+router.post("/", forumController.createPost);
+// Tambahkan baris ini di bawah rute router.use(authMiddleware)
+router.put("/:id_posting", forumController.updatePost); // <--- Tambahkan rute Edit
+router.delete("/:id_posting", forumController.deletePost);
+router.post("/comment/:id_posting", forumController.addComment);
+router.post("/like/:id_posting", forumController.toggleLike);
+router.delete("/:id_posting", forumController.deletePost);
 
 module.exports = router;

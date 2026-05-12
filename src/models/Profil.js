@@ -9,11 +9,12 @@ const Profil = sequelize.define(
       primaryKey: true,
       autoIncrement: true,
     },
-    id_akun: { type: DataTypes.INTEGER }, // Foreign Key
+    id_akun: { type: DataTypes.INTEGER },
     username: { type: DataTypes.STRING },
     bio: { type: DataTypes.TEXT },
     foto_profil: { type: DataTypes.STRING },
-    total_poin: { type: DataTypes.INTEGER, defaultValue: 0 },
+    // PERUBAHAN: Poin menjadi Saldo
+    total_saldo: { type: DataTypes.INTEGER, defaultValue: 0 },
     level_pengguna: { type: DataTypes.STRING },
   },
   { freezeTableName: true, timestamps: false },

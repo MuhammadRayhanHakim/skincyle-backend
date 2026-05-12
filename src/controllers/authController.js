@@ -1,24 +1,32 @@
 const { Akun, Profil } = require("../models");
-const jwt = require("jsonwebtoken"); // Tambahkan ini
-// const bcrypt = require("bcryptjs"); // Gunakan ini jika ingin enkripsi password
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 
-// 1. Fungsi Register
 exports.register = async (req, res) => {
   try {
     const { email, kata_sandi, username } = req.body;
 
-    // Opsional: Hashing password sebelum simpan
-    // const salt = await bcrypt.genSalt(10);
-    // const hashedSandi = await bcrypt.hash(kata_sandi, salt);
+    const emailExist = await Akun.findOne({ where: { email } });
+    if (emailExist) {
+      return res
+        .status(400)
+        .json({ status: "error", message: "Email sudah terdaftar" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedSandi = await bcrypt.hash(kata_sandi, salt);
 
     const akunBaru = await Akun.create({
       email,
-      kata_sandi, // Ganti jadi hashedSandi jika pakai bcrypt
+      kata_sandi: hashedSandi,
     });
 
+    // Inisialisasi Profil dengan Saldo 0
     await Profil.create({
       id_akun: akunBaru.id_akun,
       username: username,
+      total_saldo: 0,
+      level_pengguna: "Newbie",
     });
 
     res.status(201).json({
@@ -30,43 +38,28 @@ exports.register = async (req, res) => {
   }
 };
 
-// 2. Fungsi Login (DENGAN JWT)
 exports.login = async (req, res) => {
   try {
     const { email, kata_sandi } = req.body;
-
-    // 1. Cari akun berdasarkan email
     const user = await Akun.findOne({ where: { email } });
 
-    // 2. Jika user tidak ditemukan
-    if (!user) {
+    if (!user || !(await bcrypt.compare(kata_sandi, user.kata_sandi))) {
       return res.status(401).json({
         status: "error",
-        message: "Email tidak terdaftar",
+        message: "Email atau kata sandi salah",
       });
     }
 
-    // 3. Cek Password (saat ini masih teks biasa sesuai database Anda)
-    if (user.kata_sandi !== kata_sandi) {
-      return res.status(401).json({
-        status: "error",
-        message: "Kata sandi salah",
-      });
-    }
-
-    // 4. Ambil profil untuk mendapatkan data user
     const profil = await Profil.findOne({ where: { id_akun: user.id_akun } });
 
-    // 5. GENERATE TOKEN JWT
-    // Data ini yang akan terbaca di 'req.user' pada Middleware
     const token = jwt.sign(
-      { 
-        id_akun: user.id_akun, 
+      {
+        id_akun: user.id_akun,
         id_profil: profil ? profil.id_profil : null,
-        username: profil ? profil.username : null 
+        username: profil ? profil.username : null,
       },
-      process.env.JWT_SECRET || "rahasia_skincycle_2026", // Secret Key
-      { expiresIn: "1d" } // Token berlaku 24 jam
+      process.env.JWT_SECRET || "rahasia_skincycle_2026",
+      { expiresIn: "1d" },
     );
 
     res.json({
@@ -75,7 +68,8 @@ exports.login = async (req, res) => {
       data: {
         id_profil: profil ? profil.id_profil : null,
         username: profil ? profil.username : null,
-        token: token, // TOKEN INI YANG DISIMPAN FRONTEND/POSTMAN
+        total_saldo: profil ? profil.total_saldo : 0,
+        token: token,
       },
     });
   } catch (error) {

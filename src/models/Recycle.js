@@ -9,39 +9,42 @@ const LaporanDaurUlang = sequelize.define(
       primaryKey: true,
       autoIncrement: true,
     },
-    // WAJIB DITAMBAHKAN: Kolom untuk menampung ID User/Profil
     id_profil: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      references: {
-        model: "profil_pengguna", // Nama tabel profil di DB
-        key: "id_profil",
-      },
     },
-    nama_produk: {
-      type: DataTypes.STRING,
+    // Menyimpan rincian sampah dari tombol + (contoh: [{"item": "botol", "qty": 2}])
+    rincian_karung_visual: {
+      type: DataTypes.JSONB,
       allowNull: false,
     },
-    // Sesuaikan dengan Postman (Anda mengirim "kategori" di Postman)
-    kategori: {
-      type: DataTypes.STRING,
+    alamat_penjemputan: {
+      type: DataTypes.TEXT,
+      allowNull: false,
     },
-    status_daur_ulang: {
-      type: DataTypes.ENUM("pending", "verified", "rejected"),
-      defaultValue: "pending",
+    estimasi_berat: {
+      type: DataTypes.FLOAT,
     },
-    lokasi_drop_point: {
-      type: DataTypes.STRING,
-      defaultValue: "Pusat Daur Ulang Bekasi", // Contoh default
+    foto_bukti_fisik: {
+      type: DataTypes.STRING, // URL/Path foto
     },
-    poin_didapat: {
+    status_jemput: {
+      type: DataTypes.ENUM(
+        "menunggu_verifikasi",
+        "proses_jemput",
+        "selesai",
+        "ditolak",
+      ),
+      defaultValue: "menunggu_verifikasi",
+    },
+    saldo_cair: {
       type: DataTypes.INTEGER,
-      defaultValue: 0,
+      defaultValue: 0, // Baru diisi oleh admin setelah ditimbang
     },
   },
   {
     freezeTableName: true,
-    timestamps: true, // Bagus untuk tahu kapan user setor botol
+    timestamps: true,
   },
 );
 

@@ -6,67 +6,91 @@ const Ensiklopedia = require("./Ensiklopedia");
 const Recycle = require("./Recycle");
 const Forum = require("./Forum");
 const Komentar = require("./Komentar");
-const RiwayatPoin = require("./RiwayatPoin");
-
-// -- IMPORT MODEL BARU (STAKEHOLDER & REWARDS) --
+const RiwayatSaldo = require("./RiwayatSaldo");
 const Stakeholder = require("./Stakeholder");
 const Produk = require("./Produk");
-const VoucherReward = require("./VoucherReward");
-const RedeemTransaction = require("./RedeemTransaction");
+const ForumLike = require("./ForumLike");
+const Notifikasi = require("./Notifikasi"); // 1. Import Model Notifikasi
 
-// -- RELATIONSHIPS (Sesuai Garis ERD & Controller Logic) --
+// -- RELATIONSHIPS --
 
 // 1. Akun & Profil (1:1)
 Akun.hasOne(Profil, { foreignKey: "id_akun", onDelete: "CASCADE" });
 Profil.belongsTo(Akun, { foreignKey: "id_akun" });
 
 // 2. Profil & Forum (1:M)
-Profil.hasMany(Forum, { foreignKey: "id_profil" });
-Forum.belongsTo(Profil, { foreignKey: "id_profil" });
+Profil.hasMany(Forum, { foreignKey: "id_profil", as: "postingan" });
+Forum.belongsTo(Profil, { foreignKey: "id_profil", as: "penulis" });
 
 // 3. Forum & Komentar (1:M)
-Forum.hasMany(Komentar, { foreignKey: "id_posting", onDelete: "CASCADE" });
+Forum.hasMany(Komentar, {
+  foreignKey: "id_posting",
+  as: "komentar",
+  onDelete: "CASCADE",
+});
 Komentar.belongsTo(Forum, { foreignKey: "id_posting" });
 
 // 4. Profil & Komentar (1:M)
-Profil.hasMany(Komentar, { foreignKey: "id_profil" });
-Komentar.belongsTo(Profil, { foreignKey: "id_profil" });
+Profil.hasMany(Komentar, { foreignKey: "id_profil", as: "balasan_user" });
+Komentar.belongsTo(Profil, { foreignKey: "id_profil", as: "pemberi_komentar" });
 
-// 5. Profil & Recycle (1:M)
-Profil.hasMany(Recycle, { foreignKey: "id_profil" });
+// 5. Forum & ForumLike (1:M & 1:M)
+Forum.hasMany(ForumLike, {
+  foreignKey: "id_posting",
+  as: "likes",
+  onDelete: "CASCADE",
+});
+ForumLike.belongsTo(Forum, { foreignKey: "id_posting" });
+
+Profil.hasMany(ForumLike, { foreignKey: "id_profil", as: "suka_postingan" });
+ForumLike.belongsTo(Profil, { foreignKey: "id_profil" });
+
+// 6. Profil & Recycle (1:M)
+Profil.hasMany(Recycle, {
+  foreignKey: "id_profil",
+  as: "aktivitas_daur_ulang",
+});
 Recycle.belongsTo(Profil, { foreignKey: "id_profil" });
 
-// 6. Profil & RiwayatPoin (1:M)
-Profil.hasMany(RiwayatPoin, { foreignKey: "id_profil" });
-RiwayatPoin.belongsTo(Profil, { foreignKey: "id_profil" });
+// 7. Profil & RiwayatSaldo (1:M)
+Profil.hasMany(RiwayatSaldo, {
+  foreignKey: "id_profil",
+  as: "riwayat_transaksi",
+});
+RiwayatSaldo.belongsTo(Profil, { foreignKey: "id_profil" });
 
-// -- RELASI BARU (LOGIKA BISNIS & STAKEHOLDER) --
-
-// 7. Stakeholder & Produk (1:M)
-// Satu brand partner memiliki banyak katalog produk
+// 8. Stakeholder & Produk (1:M)
 Stakeholder.hasMany(Produk, {
   foreignKey: "id_stakeholder",
+  as: "daftar_produk",
   onDelete: "CASCADE",
 });
 Produk.belongsTo(Stakeholder, { foreignKey: "id_stakeholder" });
 
-// 8. Stakeholder & VoucherReward (1:M)
-// Satu brand partner menyediakan banyak pilihan voucher reward
-Stakeholder.hasMany(VoucherReward, {
-  foreignKey: "id_stakeholder",
-  onDelete: "CASCADE",
+// 9. RELASI NOTIFIKASI (BARU)
+// Relasi ke Profil Penerima (Siapa yang mendapat notif)
+Profil.hasMany(Notifikasi, {
+  foreignKey: "id_profil_penerima",
+  as: "notif_masuk",
 });
-VoucherReward.belongsTo(Stakeholder, { foreignKey: "id_stakeholder" });
+Notifikasi.belongsTo(Profil, {
+  foreignKey: "id_profil_penerima",
+  as: "penerima",
+});
 
-// 9. Profil & RedeemTransaction (1:M)
-// Satu profil melakukan banyak transaksi penukaran voucher
-Profil.hasMany(RedeemTransaction, { foreignKey: "id_profil" });
-RedeemTransaction.belongsTo(Profil, { foreignKey: "id_profil" });
+// Relasi ke Profil Pengirim (Siapa yang melakukan aksi like/komen)
+Profil.hasMany(Notifikasi, {
+  foreignKey: "id_profil_pengirim",
+  as: "notif_keluar",
+});
+Notifikasi.belongsTo(Profil, {
+  foreignKey: "id_profil_pengirim",
+  as: "pengirim",
+});
 
-// 10. VoucherReward & RedeemTransaction (1:M)
-// Satu jenis voucher bisa ditukarkan oleh banyak user (tercatat di transaksi)
-VoucherReward.hasMany(RedeemTransaction, { foreignKey: "id_voucher" });
-RedeemTransaction.belongsTo(VoucherReward, { foreignKey: "id_voucher" });
+// Relasi ke Forum (Notifikasi merujuk ke postingan mana)
+Forum.hasMany(Notifikasi, { foreignKey: "id_posting", onDelete: "CASCADE" });
+Notifikasi.belongsTo(Forum, { foreignKey: "id_posting" });
 
 module.exports = {
   sequelize,
@@ -77,9 +101,9 @@ module.exports = {
   Recycle,
   Forum,
   Komentar,
-  RiwayatPoin,
+  RiwayatSaldo,
   Stakeholder,
   Produk,
-  VoucherReward,
-  RedeemTransaction,
+  ForumLike,
+  Notifikasi, // 2. Export Model Notifikasi
 };
