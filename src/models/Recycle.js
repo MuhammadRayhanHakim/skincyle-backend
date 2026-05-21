@@ -1,8 +1,61 @@
+// const { DataTypes } = require("sequelize");
+// const sequelize = require("../config/db");
+
+// const LaporanDaurUlang = sequelize.define(
+//   "laporan_daur_ulang",
+//   {
+//     id_laporan: {
+//       type: DataTypes.INTEGER,
+//       primaryKey: true,
+//       autoIncrement: true,
+//     },
+//     id_profil: {
+//       type: DataTypes.INTEGER,
+//       allowNull: false,
+//     },
+//     // Menyimpan rincian sampah dari tombol + (contoh: [{"item": "botol", "qty": 2}])
+//     rincian_karung_visual: {
+//       type: DataTypes.JSONB,
+//       allowNull: false,
+//     },
+//     alamat_penjemputan: {
+//       type: DataTypes.TEXT,
+//       allowNull: false,
+//     },
+//     estimasi_berat: {
+//       type: DataTypes.FLOAT,
+//     },
+//     foto_bukti_fisik: {
+//       type: DataTypes.STRING, // URL/Path foto
+//     },
+//     status_jemput: {
+//       type: DataTypes.ENUM(
+//         "menunggu_verifikasi",
+//         "proses_jemput",
+//         "selesai",
+//         "ditolak",
+//       ),
+//       defaultValue: "menunggu_verifikasi",
+//     },
+//     saldo_cair: {
+//       type: DataTypes.INTEGER,
+//       defaultValue: 0, // Baru diisi oleh admin setelah ditimbang
+//     },
+//   },
+//   {
+//     freezeTableName: true,
+//     timestamps: true,
+//   },
+// );
+
+// module.exports = LaporanDaurUlang;
+
+
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/db");
 
-const LaporanDaurUlang = sequelize.define(
-  "laporan_daur_ulang",
+const Recycle = sequelize.define(
+  "Recycle",
   {
     id_laporan: {
       type: DataTypes.INTEGER,
@@ -13,39 +66,35 @@ const LaporanDaurUlang = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
-    // Menyimpan rincian sampah dari tombol + (contoh: [{"item": "botol", "qty": 2}])
     rincian_karung_visual: {
       type: DataTypes.JSONB,
-      allowNull: false,
+      allowNull: true,
     },
     alamat_penjemputan: {
       type: DataTypes.TEXT,
-      allowNull: false,
+      allow_null: false,
     },
     estimasi_berat: {
-      type: DataTypes.FLOAT,
+      type: DataTypes.DOUBLE,
+      allowNull: true,
     },
     foto_bukti_fisik: {
-      type: DataTypes.STRING, // URL/Path foto
+      type: DataTypes.STRING,
+      allowNull: true,
     },
     status_jemput: {
-      type: DataTypes.ENUM(
-        "menunggu_verifikasi",
-        "proses_jemput",
-        "selesai",
-        "ditolak",
-      ),
+      type: DataTypes.STRING,
       defaultValue: "menunggu_verifikasi",
     },
     saldo_cair: {
       type: DataTypes.INTEGER,
-      defaultValue: 0, // Baru diisi oleh admin setelah ditimbang
+      defaultValue: 0,
     },
   },
   {
-    freezeTableName: true,
-    timestamps: true,
+    tableName: "laporan_daur_ulang",
+    timestamps: true, // Ini akan otomatis menangani kolom createdAt dan updatedAt [cite: 8]
   },
 );
 
-module.exports = LaporanDaurUlang;
+module.exports = Recycle;

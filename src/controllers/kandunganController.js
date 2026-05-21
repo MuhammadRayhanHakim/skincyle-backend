@@ -1,24 +1,102 @@
-const { Kandungan } = require("../models");
-const { Op } = require("sequelize"); // Import Operator Sequelize untuk pencarian
+const Kandungan = require("../models/Kandungan");
+const { Op } = require("sequelize");
 
+// GET: Mengambil semua kandungan dengan filter pencarian (User & Admin)
 exports.getKandungan = async (req, res) => {
   try {
-    const { q } = req.query; // Menangkap kata kunci dari URL, misal: ?q=niacinamide
-    
-    let queryOptions = {};
+    const { q } = req.query;
+    let queryOptions = { order: [["id_kandungan", "DESC"]] };
+
     if (q) {
-      queryOptions = {
-        where: {
-          nama_kandungan: {
-            [Op.iLike]: `%${q}%` // Mencari kata yang mirip (Case-insensitive)
-          }
-        }
+      queryOptions.where = {
+        nama_kandungan: {
+          [Op.iLike]: `%${q}%`,
+        },
       };
     }
 
     const data = await Kandungan.findAll(queryOptions);
-    res.json({ status: "success", data });
+    return res.json({ status: "success", data });
   } catch (error) {
-    res.status(500).json({ status: "error", message: error.message });
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+};
+
+// POST: Admin Menambahkan Kandungan Baru ke Database
+exports.createKandungan = async (req, res) => {
+  try {
+    const {
+      nama_kandungan,
+      fungsi,
+      manfaat,
+      efek_samping,
+      jenis_kulit_cocok,
+      kategori_bahan,
+      status_publikasi,
+    } = req.body;
+
+    const gambar = req.file ? req.file.filename : "default-ing.jpg";
+
+    const kandunganBaru = await Kandungan.create({
+      nama_kandungan,
+      fungsi,
+      manfaat,
+      efek_samping,
+      jenis_kulit_cocok,
+      kategori_bahan: kategori_bahan || "Semua",
+      status_publikasi: status_publikasi || "Published",
+      gambar_bahan: gambar,
+    });
+
+    return res.status(201).json({
+      status: "success",
+      message: "Bahan kandungan baru berhasil disimpan!",
+      data: kandunganBaru,
+    });
+  } catch (error) {
+    return res.status(500).json({ status: "error", message: error.message });
+  }
+};
+
+// PUT: Admin Mengubah/Edit Bahan Kandungan
+exports.updateKandungan = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const kandungan = await Kandungan.findByPk(id);
+    if (!kandungan) {
+      return res
+        .status(404)
+        .json({ status: "error", message: "Bahan tidak ditemukan" });
+    }
+
+    const {
+      nama_kandungan,
+      fungsi,
+      manfaat,
+      efek_samping,
+      jenis_kulit_cocok,
+      kategori_bahan,
+      status_publikasi,
+    } = req.body;
+
+    const dataUpdate = {
+      nama_kandungan: nama_kandungan || kandungan.nama_kandungan,
+      fungsi: fungsi || kandungan.fungsi,
+      manfaat: manfaat || kandungan.manfaat,
+      efek_samping: efek_samping || kandungan.efek_samping,
+      jenis_kulit_cocok: jenis_kulit_cocok || kandungan.jenis_kulit_cocok,
+      kategori_bahan: kategori_bahan || kandungan.kategori_bahan,
+      status_publikasi: status_publikasi || kandungan.status_publikasi,
+    };
+
+    if (req.file) dataUpdate.gambar_bahan = req.file.filename;
+
+    await kandungan.update(dataUpdate);
+    return res.json({
+      status: "success",
+      message: "Bahan kandungan berhasil diperbarui!",
+    });
+  } catch (error) {
+    return res.status(500).json({ status: "error", message: error.message });
   }
 };

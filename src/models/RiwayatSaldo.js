@@ -13,11 +13,18 @@ const RiwayatSaldo = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    // --- TAMBAHKAN KOLOM HUBUNGAN INI (PENTING) ---
+    id_laporan: {
+      type: DataTypes.INTEGER,
+      allowNull: true, // Diisi ID laporan daur ulang jika tipenya saldo masuk hasil recycle
+    },
     aktivitas: {
       type: DataTypes.STRING,
-    }, // Contoh: "Pencairan Saldo Recycle #12"
+      allowNull: false, // Menjamin deskripsi aktivitas tidak boleh kosong
+    }, // Contoh: "Recycling: 1.2kg Glass Jars"
     jumlah_saldo: {
       type: DataTypes.INTEGER,
+      allowNull: false,
     }, // Nilai dalam Rupiah
     tipe_transaksi: {
       type: DataTypes.ENUM("masuk", "keluar"),
@@ -29,7 +36,7 @@ const RiwayatSaldo = sequelize.define(
     },
   },
   {
-    freezeTableName: true,
+    freezeTableName: true, // Menjaga nama tabel di database tetap 'riwayat_saldo'
     timestamps: false,
   },
 );

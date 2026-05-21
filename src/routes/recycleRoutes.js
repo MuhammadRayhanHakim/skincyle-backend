@@ -1,12 +1,22 @@
-const express = require('express');
+// routes/recycleRoutes.js
+const express = require("express");
 const router = express.Router();
-const recycleController = require('../controllers/recycleController');
-const authMiddleware = require("../middleware/authMiddleware"); 
+const upload = require("../middleware/multerConfig");
+const authMiddleware = require("../middleware/authMiddleware");
+const recycleController = require("../controllers/recycleController");
 
-// Menggunakan fungsi submitDropVerify yang baru saja kita buat
-router.post('/drop-verify', authMiddleware, recycleController.submitDropVerify);
+// HAPUS baris yang lama, gunakan SATU baris ini saja:
+router.post(
+  "/drop-verify",
+  authMiddleware,
+  upload.single("foto_bukti"),
+  recycleController.submitDropVerify,
+);
 
-// (Opsional) Route untuk melihat riwayat sampah user sendiri
-// router.get('/history', authMiddleware, recycleController.getHistory);
+router.get(
+  "/user-history",
+  authMiddleware,
+  recycleController.getUserRecycleHistory,
+);
 
 module.exports = router;

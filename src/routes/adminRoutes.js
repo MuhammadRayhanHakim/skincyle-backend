@@ -1,18 +1,50 @@
+// // src/routes/adminRoutes.js
+// const express = require("express");
+// const router = express.Router();
+// const adminController = require("../controllers/adminController");
+// const authMiddleware = require("../middleware/authMiddleware");
+
+// // 1. Endpoint untuk mengambil semua laporan masuk (Dashboard Admin)
+// // Tambahkan baris ini:
+// router.get(
+//   "/all-laporan",
+//   authMiddleware,
+//   adminController.getAllLaporanRecycle,
+// );
+
+// // 2. Endpoint untuk Verifikasi & Cairkan Saldo
+// router.post(
+//   "/verify-recycle",
+//   authMiddleware,
+//   adminController.verifikasiDanCairkanSaldo,
+// );
+
+// module.exports = router;
+
 const express = require("express");
 const router = express.Router();
 const adminController = require("../controllers/adminController");
 const authMiddleware = require("../middleware/authMiddleware");
 
-// Middleware authMiddleware dipasang agar tidak sembarang orang bisa akses
-// Note: Kedepannya kamu bisa tambah middleware 'isAdmin' untuk keamanan ekstra
-// 1. Endpoint untuk Admin mengonfirmasi berat sampah dan mencairkan saldo
-router.post(
-  "/verify-recycle", 
-  authMiddleware, 
-  adminController.verifikasiDanCairkanSaldo
+// Endpoint untuk mengambil semua laporan (Dashboard Admin)
+// Pastikan path ini sesuai dengan yang dipanggil Frontend
+router.get(
+  "/all-laporan",
+  authMiddleware,
+  adminController.getAllLaporanRecycle,
 );
 
-// 2. Endpoint untuk Admin melihat semua daftar jemputan yang masuk (Pending)
-// router.get("/pending-reports", authMiddleware, adminController.getAllPendingReports);
+// Endpoint verifikasi
+router.post(
+  "/verify-recycle",
+  authMiddleware,
+  adminController.verifikasiDanCairkanSaldo,
+);
+
+router.post(
+  "/final-recycle",
+  authMiddleware,
+  adminController.finalisasiDanKirimSaldo,
+);
 
 module.exports = router;
