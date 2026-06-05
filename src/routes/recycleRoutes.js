@@ -4,7 +4,7 @@ const router = express.Router();
 const upload = require("../middleware/multerConfig");
 const authMiddleware = require("../middleware/authMiddleware");
 const recycleController = require("../controllers/recycleController");
-
+const verifyToken = require("../middleware/authMiddleware");
 // HAPUS baris yang lama, gunakan SATU baris ini saja:
 router.post(
   "/drop-verify",
@@ -16,6 +16,7 @@ router.post(
 router.get(
   "/user-history",
   authMiddleware,
+  verifyToken,
   recycleController.getUserRecycleHistory,
 );
 

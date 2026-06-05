@@ -1,13 +1,12 @@
 // const { Forum, Profil, Komentar, ForumLike, Notifikasi } = require("../models");
 // const { Op } = require("sequelize");
 
+// // 1. Ambil Semua Postingan (Search & Filter)
 // exports.getPosts = async (req, res) => {
 //   try {
-//     const { search } = req.query; // Menangkap kata kunci dari URL (?search=...)
-
+//     const { search } = req.query;
 //     let whereCondition = {};
 
-//     // Jika user sedang mencari sesuatu
 //     if (search) {
 //       const querySearch = `%${search}%`;
 //       whereCondition = {
@@ -21,7 +20,7 @@
 //     }
 
 //     const data = await Forum.findAll({
-//       where: whereCondition, // Terapkan penyaringan di sini
+//       where: whereCondition,
 //       include: [
 //         { model: Profil, as: "penulis", attributes: ["username"] },
 //         { model: ForumLike, as: "likes" },
@@ -75,13 +74,10 @@
 //       return res
 //         .status(404)
 //         .json({ status: "error", message: "Postingan tidak ditemukan" });
-
-//     if (post.id_profil !== id_profil) {
-//       return res.status(403).json({
-//         status: "error",
-//         message: "Anda tidak memiliki akses untuk mengedit ini",
-//       });
-//     }
+//     if (post.id_profil !== id_profil)
+//       return res
+//         .status(403)
+//         .json({ status: "error", message: "Akses ditolak" });
 
 //     await post.update({
 //       judul_posting: judul_posting || post.judul_posting,
@@ -97,7 +93,7 @@
 //   }
 // };
 
-// // 4. Fitur Like / Upvote + TRIGGER NOTIFIKASI
+// // 4. Fitur Like / Upvote + Notifikasi
 // exports.toggleLike = async (req, res) => {
 //   try {
 //     const { id_posting } = req.params;
@@ -118,8 +114,7 @@
 
 //     await ForumLike.create({ id_posting, id_profil });
 
-//     // --- LOGIKA NOTIFIKASI LIKE ---
-//     // Notifikasi dikirim ke PEMILIK postingan (post.id_profil)
+//     // Notifikasi dikirim ke PEMILIK postingan
 //     if (post.id_profil !== id_profil) {
 //       await Notifikasi.create({
 //         id_profil_penerima: post.id_profil,
@@ -136,42 +131,60 @@
 //   }
 // };
 
-// // 5. Tambah Komentar + TRIGGER NOTIFIKASI
+// // 5. Tambah Komentar + SMART NOTIFIKASI (Balasan & Mention)
 // exports.addComment = async (req, res) => {
 //   try {
-//     const { id_posting } = req.params;
+//     const { id_posting } = req.params; // Mengambil dari URL /api/forum/comment/:id_posting
 //     const { isi_komentar, anonim } = req.body;
-//     const id_profil = req.user.id_profil;
+//     const id_profil_pengirim = req.user.id_profil;
 
 //     const post = await Forum.findByPk(id_posting);
 //     if (!post)
 //       return res.status(404).json({ message: "Postingan tidak ditemukan" });
 
+//     // PROSES SIMPAN KE DATABASE
 //     const komentarBaru = await Komentar.create({
-//       id_posting,
-//       id_profil,
-//       isi_komentar,
+//       id_posting: id_posting, // Pastikan nama key sesuai dengan kolom di database Anda
+//       id_profil: id_profil_pengirim,
+//       isi_komentar: isi_komentar,
 //       anonim: anonim || false,
 //     });
 
-//     // --- LOGIKA NOTIFIKASI KOMENTAR ---
-//     if (post.id_profil !== id_profil) {
+//     // --- LOGIKA NOTIFIKASI ---
+//     const mentionMatch = isi_komentar.match(/@(\w+)/);
+//     let targetPenerima = post.id_profil;
+//     let tipeNotif = "komentar";
+
+//     if (mentionMatch) {
+//       const usernameTarget = mentionMatch[1];
+//       const profilTarget = await Profil.findOne({
+//         where: { username: usernameTarget },
+//       });
+//       if (profilTarget) {
+//         targetPenerima = profilTarget.id_profil;
+//         tipeNotif = "balasan";
+//       }
+//     }
+
+//     if (targetPenerima !== id_profil_pengirim) {
 //       await Notifikasi.create({
-//         id_profil_penerima: post.id_profil,
-//         id_profil_pengirim: id_profil,
-//         tipe: "komentar",
+//         id_profil_penerima: targetPenerima,
+//         id_profil_pengirim: id_profil_pengirim,
+//         tipe: tipeNotif,
 //         id_posting: id_posting,
+//         id_komentar: komentarBaru.id_komentar, // Simpan ID komentar untuk navigasi
 //         is_read: false,
 //       });
 //     }
 
 //     res.status(201).json({ status: "success", data: komentarBaru });
 //   } catch (error) {
+//     console.error("Error Detail:", error); // Munculkan error di terminal backend agar mudah dilacak
 //     res.status(500).json({ status: "error", message: error.message });
 //   }
 // };
 
-// // 6. Ambil Detail Postingan tunggal
+// // 6. Ambil Detail Postingan
 // exports.getPostDetail = async (req, res) => {
 //   try {
 //     const { id_posting } = req.params;
@@ -216,7 +229,7 @@
 const { Forum, Profil, Komentar, ForumLike, Notifikasi } = require("../models");
 const { Op } = require("sequelize");
 
-// 1. Ambil Semua Postingan (Search & Filter)
+// 1. Ambil Semua Postingan (Search & Filter) - DIPERBAIKI (Include foto_profil)
 exports.getPosts = async (req, res) => {
   try {
     const { search } = req.query;
@@ -237,13 +250,21 @@ exports.getPosts = async (req, res) => {
     const data = await Forum.findAll({
       where: whereCondition,
       include: [
-        { model: Profil, as: "penulis", attributes: ["username"] },
+        {
+          model: Profil,
+          as: "penulis",
+          attributes: ["username", "foto_profil"], // 🆕 Ditambahkan foto_profil
+        },
         { model: ForumLike, as: "likes" },
         {
           model: Komentar,
           as: "komentar",
           include: [
-            { model: Profil, as: "pemberi_komentar", attributes: ["username"] },
+            {
+              model: Profil,
+              as: "pemberi_komentar",
+              attributes: ["username", "foto_profil"], // 🆕 Ditambahkan foto_profil
+            },
           ],
         },
       ],
@@ -329,7 +350,6 @@ exports.toggleLike = async (req, res) => {
 
     await ForumLike.create({ id_posting, id_profil });
 
-    // Notifikasi dikirim ke PEMILIK postingan
     if (post.id_profil !== id_profil) {
       await Notifikasi.create({
         id_profil_penerima: post.id_profil,
@@ -349,7 +369,7 @@ exports.toggleLike = async (req, res) => {
 // 5. Tambah Komentar + SMART NOTIFIKASI (Balasan & Mention)
 exports.addComment = async (req, res) => {
   try {
-    const { id_posting } = req.params; // Mengambil dari URL /api/forum/comment/:id_posting
+    const { id_posting } = req.params;
     const { isi_komentar, anonim } = req.body;
     const id_profil_pengirim = req.user.id_profil;
 
@@ -357,15 +377,13 @@ exports.addComment = async (req, res) => {
     if (!post)
       return res.status(404).json({ message: "Postingan tidak ditemukan" });
 
-    // PROSES SIMPAN KE DATABASE
     const komentarBaru = await Komentar.create({
-      id_posting: id_posting, // Pastikan nama key sesuai dengan kolom di database Anda
+      id_posting: id_posting,
       id_profil: id_profil_pengirim,
       isi_komentar: isi_komentar,
       anonim: anonim || false,
     });
 
-    // --- LOGIKA NOTIFIKASI ---
     const mentionMatch = isi_komentar.match(/@(\w+)/);
     let targetPenerima = post.id_profil;
     let tipeNotif = "komentar";
@@ -387,30 +405,38 @@ exports.addComment = async (req, res) => {
         id_profil_pengirim: id_profil_pengirim,
         tipe: tipeNotif,
         id_posting: id_posting,
-        id_komentar: komentarBaru.id_komentar, // Simpan ID komentar untuk navigasi
+        id_komentar: komentarBaru.id_komentar,
         is_read: false,
       });
     }
 
     res.status(201).json({ status: "success", data: komentarBaru });
   } catch (error) {
-    console.error("Error Detail:", error); // Munculkan error di terminal backend agar mudah dilacak
+    console.error("Error Detail:", error);
     res.status(500).json({ status: "error", message: error.message });
   }
 };
 
-// 6. Ambil Detail Postingan
+// 6. Ambil Detail Postingan - DIPERBAIKI (Include foto_profil)
 exports.getPostDetail = async (req, res) => {
   try {
     const { id_posting } = req.params;
     const data = await Forum.findByPk(id_posting, {
       include: [
-        { model: Profil, as: "penulis", attributes: ["username"] },
+        {
+          model: Profil,
+          as: "penulis",
+          attributes: ["username", "foto_profil"], // 🆕 Ditambahkan foto_profil
+        },
         {
           model: Komentar,
           as: "komentar",
           include: [
-            { model: Profil, as: "pemberi_komentar", attributes: ["username"] },
+            {
+              model: Profil,
+              as: "pemberi_komentar",
+              attributes: ["username", "foto_profil"], // 🆕 Ditambahkan foto_profil
+            },
           ],
         },
       ],

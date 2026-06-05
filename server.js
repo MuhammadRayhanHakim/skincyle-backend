@@ -15,6 +15,8 @@ const adminRoutes = require("./src/routes/adminRoutes");
 const notifikasiRoutes = require("./src/routes/notifikasiRoutes");
 const keranjangRoutes = require("./src/routes/keranjangRoutes");
 const produkRoutes = require("./src/routes/produkRoutes");
+const checkoutRoutes = require("./src/routes/checkoutRoutes");
+const orderRoutes = require("./src/routes/orderRoutes");
 
 const app = express();
 
@@ -42,6 +44,8 @@ app.use("/api/partner", partnerRoutes);
 app.use("/api/notifikasi", notifikasiRoutes);
 app.use("/api/keranjang", keranjangRoutes);
 app.use("/api/produk", produkRoutes);
+app.use("/api/checkout", checkoutRoutes);
+app.use("/api", orderRoutes);
 
 app.get("/", (req, res) => res.send("SkinCycle API is Active & Updated"));
 

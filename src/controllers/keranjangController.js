@@ -1,18 +1,15 @@
-// src/controllers/keranjangController.js
-const { Keranjang, Produk } = require("../models");
+const Keranjang = require("../models/Keranjang");
+const Produk = require("../models/Produk");
 
 // 1. AMBIL SEMUA ITEM DI KERANJANG BERDASARKAN USER ID
 exports.getCartItems = async (req, res) => {
   try {
-    // id_pengguna diambil dari token autentikasi (req.user.id atau sejenisnya)
-    // Jika belum setup token user, sementara pakai id dummy (misal: 1) untuk testing
-    const id_pengguna = req.user?.id || 1;
+    const id_pengguna = req.user?.id_profil || req.user?.id || 1;
 
     const items = await Keranjang.findAll({
       where: { id_pengguna },
-      include: [{ model: Produk }], // Ikut sertakan detail produk (nama, harga, gambar)
+      include: [{ model: Produk }],
     });
-
     return res.json({ status: "success", data: items });
   } catch (error) {
     console.error("Error getCartItems:", error);
@@ -20,19 +17,19 @@ exports.getCartItems = async (req, res) => {
   }
 };
 
-// 2. TAMBAH ATAU UPDATE PRODUK DI DALAM KERANJANG
+// 2. TAMBAH ATAU UPDATE PRODUK DI DALAM KERANJANG (PERBAIKAN ERROR INDEKS)
 exports.addToCart = async (req, res) => {
   try {
     const { id_produk, quantity } = req.body;
-    const id_pengguna = req.user?.id || 1; // Fallback ke id 1 jika testing tanpa login
+    // Menggunakan id_profil yang konsisten disuntikkan oleh authMiddleware Anda
+    const id_pengguna = req.user?.id_profil || req.user?.id || 1;
 
-    // Cek apakah produk tersebut sudah ada di keranjang user
+    // Sekarang Keranjang dipastikan terbaca dan tidak undefined
     const existingItem = await Keranjang.findOne({
       where: { id_pengguna, id_produk },
     });
 
     if (existingItem) {
-      // Jika sudah ada, tambahkan quantity-nya
       existingItem.quantity += quantity ? parseInt(quantity) : 1;
       await existingItem.save();
       return res.json({
@@ -41,7 +38,6 @@ exports.addToCart = async (req, res) => {
         data: existingItem,
       });
     } else {
-      // Jika belum ada, buat record baru
       const newItem = await Keranjang.create({
         id_pengguna,
         id_produk,
@@ -62,7 +58,7 @@ exports.addToCart = async (req, res) => {
 // 3. UPDATE QUANTITY LANGSUNG DARI TOMBOL + / - DI FRONTEND
 exports.updateCartQty = async (req, res) => {
   try {
-    const { id } = req.params; // ID Keranjang
+    const { id } = req.params;
     const { quantity } = req.body;
 
     await Keranjang.update(
@@ -81,7 +77,7 @@ exports.updateCartQty = async (req, res) => {
 // 4. HAPUS ITEM DARI KERANJANG (TOMBOL TRASH)
 exports.deleteCartItem = async (req, res) => {
   try {
-    const { id } = req.params; // ID Keranjang
+    const { id } = req.params;
     await Keranjang.destroy({ where: { id_keranjang: id } });
     return res.json({
       status: "success",

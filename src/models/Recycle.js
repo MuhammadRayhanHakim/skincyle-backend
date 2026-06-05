@@ -1,8 +1,8 @@
 // const { DataTypes } = require("sequelize");
 // const sequelize = require("../config/db");
 
-// const LaporanDaurUlang = sequelize.define(
-//   "laporan_daur_ulang",
+// const Recycle = sequelize.define(
+//   "Recycle",
 //   {
 //     id_laporan: {
 //       type: DataTypes.INTEGER,
@@ -13,42 +13,41 @@
 //       type: DataTypes.INTEGER,
 //       allowNull: false,
 //     },
-//     // Menyimpan rincian sampah dari tombol + (contoh: [{"item": "botol", "qty": 2}])
 //     rincian_karung_visual: {
 //       type: DataTypes.JSONB,
-//       allowNull: false,
+//       allowNull: true,
 //     },
 //     alamat_penjemputan: {
 //       type: DataTypes.TEXT,
 //       allowNull: false,
 //     },
 //     estimasi_berat: {
-//       type: DataTypes.FLOAT,
+//       type: DataTypes.DOUBLE,
+//       allowNull: true,
 //     },
 //     foto_bukti_fisik: {
-//       type: DataTypes.STRING, // URL/Path foto
+//       type: DataTypes.STRING,
+//       allowNull: true,
 //     },
 //     status_jemput: {
-//       type: DataTypes.ENUM(
-//         "menunggu_verifikasi",
-//         "proses_jemput",
-//         "selesai",
-//         "ditolak",
-//       ),
+//       type: DataTypes.STRING,
 //       defaultValue: "menunggu_verifikasi",
 //     },
 //     saldo_cair: {
 //       type: DataTypes.INTEGER,
-//       defaultValue: 0, // Baru diisi oleh admin setelah ditimbang
+//       defaultValue: 0,
 //     },
 //   },
 //   {
-//     freezeTableName: true,
-//     timestamps: true,
+//     tableName: "laporan_daur_ulang",
+//     timestamps: true, // Ini akan otomatis menangani kolom createdAt dan updatedAt [cite: 8]
 //   },
 // );
 
-// module.exports = LaporanDaurUlang;
+// module.exports = Recycle;
+
+
+
 
 
 const { DataTypes } = require("sequelize");
@@ -72,10 +71,19 @@ const Recycle = sequelize.define(
     },
     alamat_penjemputan: {
       type: DataTypes.TEXT,
-      allow_null: false,
+      allowNull: false,
+    },
+    // 🚀 TAMBAHKAN DUA KOLOM INI AGAR DATA MAPS USER TIDAK TERBUANG
+    latitude: {
+      type: DataTypes.DOUBLE,
+      allowNull: true,
+    },
+    longitude: {
+      type: DataTypes.DOUBLE,
+      allowNull: true,
     },
     estimasi_berat: {
-      type: DataTypes.DOUBLE,
+      type: DataTypes.STRING, // Menyesuaikan input string opsi boks frontend seperti "1-2 kg"
       allowNull: true,
     },
     foto_bukti_fisik: {
@@ -93,7 +101,7 @@ const Recycle = sequelize.define(
   },
   {
     tableName: "laporan_daur_ulang",
-    timestamps: true, // Ini akan otomatis menangani kolom createdAt dan updatedAt [cite: 8]
+    timestamps: true,
   },
 );
 
