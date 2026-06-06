@@ -1,8 +1,6 @@
 // const { DataTypes } = require("sequelize");
 // const db = require("../config/db");
 
-// const { safeCode } = "Clean";
-
 // const Produk = db.define(
 //   "produk",
 //   {
@@ -15,15 +13,18 @@
 //       type: DataTypes.STRING,
 //       allowNull: false,
 //     },
-//     // TAMBAHKAN KOLOM KATEGORI AGAR SYNCHRON DENGAN SELECT DROPDOWN FRONTEND
 //     kategori: {
 //       type: DataTypes.STRING,
-//       defaultValue: "Cleanser",
+//       defaultValue: "Semua",
 //     },
 //     brand: {
 //       type: DataTypes.STRING,
 //     },
 //     deskripsi_produk: {
+//       type: DataTypes.TEXT,
+//     },
+//     // === TAMBAHAN KOLOM BARU UNTUK INGREDIENTS ANALYSIS ===
+//     bahan_kandungan: {
 //       type: DataTypes.TEXT,
 //     },
 //     ph_level: {
@@ -78,12 +79,11 @@ const Produk = db.define(
     deskripsi_produk: {
       type: DataTypes.TEXT,
     },
-    // === TAMBAHAN KOLOM BARU UNTUK INGREDIENTS ANALYSIS ===
     bahan_kandungan: {
-      type: DataTypes.TEXT,
+      type: DataTypes.TEXT, // Menyimpan susunan bahan (Koma terpisah)
     },
     ph_level: {
-      type: DataTypes.FLOAT,
+      type: DataTypes.STRING, // 🌟 FIX UTAMA: Diubah ke STRING untuk menyimpan "95,80,85,65"
     },
     suitable_skin_type: {
       type: DataTypes.STRING,
@@ -94,8 +94,13 @@ const Produk = db.define(
     gambar_produk: {
       type: DataTypes.STRING,
     },
+    // === SEPARASI TUGAS BARU KOLOM MANFAAT UTAMA ===
     link_pembelian: {
       type: DataTypes.STRING,
+      defaultValue: "#",
+    },
+    manfaat_utama: {
+      type: DataTypes.TEXT, // Menyimpan "Hidrasi Intensif,Memperkuat Skin Barrier,Menenangkan Kulit"
     },
     id_stakeholder: {
       type: DataTypes.INTEGER,

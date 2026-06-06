@@ -890,10 +890,13 @@ exports.finalisasiDanKirimSaldo = async (req, res) => {
   }
 };
 
+/**
+ * 4. DATA STATISTIK UNTUK DASHBOARD UTAMA ADMIN (FIXED REFERENCE ERROR)
+ */
 exports.getDashboardOverviewStats = async (req, res) => {
   try {
     const totalProduk = await Produk.count();
-    
+
     // MENGHITUNG KATEGORI PRODUK SECARA DINAMIS
     const kelompokKategori = await Produk.findAll({
       attributes: [
@@ -903,13 +906,16 @@ exports.getDashboardOverviewStats = async (req, res) => {
       group: ["kategori"],
     });
 
-    let  = {};
+    // 🌟 FIX UTAMA: Memberikan kembali nama variabel 'distribusiProduk' yang sempat kosong akibat typo
+    let distribusiProduk = {};
 
     if (totalProduk > 0) {
       kelompokKategori.forEach((item) => {
         const namaKategori = item.getDataValue("kategori") || "Lainnya";
         const jumlah = parseInt(item.getDataValue("jumlah") || 0);
-        distribusiProduk[namaKategori] = Math.round((jumlah / totalProduk) * 100);
+        distribusiProduk[namaKategori] = Math.round(
+          (jumlah / totalProduk) * 100,
+        );
       });
     } else {
       distribusiProduk = {};
@@ -921,17 +927,18 @@ exports.getDashboardOverviewStats = async (req, res) => {
         [sequelize.fn("DISTINCT", sequelize.col("kategori")), "kategori"],
       ],
     });
-    
+
     const totalKategori = kitchenSinkCategoryFix(kategoriUnik.length);
-    const totalOrders = await RiwayatSaldo.count({ where: { tipe_transaksi: "keluar" } });
+    const totalOrders = await RiwayatSaldo.count({
+      where: { tipe_transaksi: "keluar" },
+    });
     const orderPerluDiproses = await RiwayatSaldo.count({
       where: { tipe_transaksi: "keluar", status: { [Op.not]: "selesai" } },
     });
-    
-    const totalBahan = await Kandungan.count();
-    const bahanAktifAman = await Kandungan.count(); 
 
-    // 🌟 FIX UTAMA: Menambahkan kembali deklarasi variabel permintaanDaurUlangAktif yang hilang
+    const totalBahan = await Kandungan.count();
+    const bahanAktifAman = await Kandungan.count();
+
     const permintaanDaurUlangAktif = await Recycle.count({
       where: {
         status_jemput: { [Op.in]: ["menunggu_verifikasi", "sedang_dijemput"] },
@@ -942,7 +949,9 @@ exports.getDashboardOverviewStats = async (req, res) => {
     const laporanTerbaru = await Recycle.findAll({
       limit: 5,
       order: [["createdAt", "DESC"]],
-      include: [{ model: Profil, as: "penulis_laporan", attributes: ["username"] }],
+      include: [
+        { model: Profil, as: "penulis_laporan", attributes: ["username"] },
+      ],
     });
 
     const orderTerbaru = await RiwayatSaldo.findAll({
@@ -952,23 +961,32 @@ exports.getDashboardOverviewStats = async (req, res) => {
       include: [{ model: Profil, as: "pembeli", attributes: ["username"] }],
     });
 
-    // BAGIAN PERHITUNGAN AKTIVITAS MINGGUAN (TIDAK DIUBAH)
+    // PERHITUNGAN AKTIVITAS MINGGUAN REAL-TIME DENGAN FIX OBJEK TANGGAL
     const hariLabels = [];
     const datasetSampah = [];
     const datasetOrder = [];
     const namaHari = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const startOfDay = new Date(d.setHours(0, 0, 0, 0));
-      const endOfDay = new Date(d.setHours(23, 59, 59, 999));
+      const startOfDay = new Date();
+      startOfDay.setDate(startOfDay.getDate() - i);
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date();
+      endOfDay.setDate(endOfDay.getDate() - i);
+      endOfDay.setHours(23, 59, 59, 999);
+
       hariLabels.push(namaHari[startOfDay.getDay()]);
 
       const countLaporan = await Recycle.count({
-        where: { createdAt: { [Op.between]: [startOfDay, endOfDay] } },
+        where: {
+          createdAt: { [Op.between]: [startOfDay, endOfDay] },
+          status_jemput: {
+            [Op.in]: ["selesai", "sedang_dijemput", "menunggu_verifikasi"],
+          },
+        },
       });
-      datasetSampah.push(countLaporan * 2);
+      datasetSampah.push(countLaporan * 3); // Bobot grafik representatif kg
 
       const countOrder = await RiwayatSaldo.count({
         where: {
@@ -985,17 +1003,20 @@ exports.getDashboardOverviewStats = async (req, res) => {
         cards: {
           catalog: { produk: totalProduk, kategori: totalKategori },
           sales: { total: totalOrders, pending: orderPerluDiproses },
-          materials: { total: totalBahan, aman: boksBahanAmanFix(bahanAktifAman) },
-          recycle: { aktif: permintaanDaurUlangAktif }, // 🌟 Variabel sekarang terbaca dengan aman
+          materials: {
+            total: totalBahan,
+            aman: boksBahanAmanFix(bahanAktifAman),
+          },
+          recycle: { aktif: permintaanDaurUlangAktif },
         },
         chartWeekly: {
           labels: hariLabels,
           sampah: datasetSampah,
           order: datasetOrder,
         },
-        distribusiProduk,
+        distribusiProduk, // 🌟 Sekarang variabel terkirim dengan aman tanpa error
         laporanTerbaru,
-        orderTerbaru
+        orderTerbaru,
       },
     });
   } catch (error) {
@@ -1003,7 +1024,6 @@ exports.getDashboardOverviewStats = async (req, res) => {
     res.status(500).json({ status: "error", message: error.message });
   }
 };
-
 // Fungsi pembantu jika kategori terdeteksi kosong
 function kitchenSinkCategoryFix(len) {
   return len === 0 ? 0 : len;
