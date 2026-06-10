@@ -1,7 +1,7 @@
 const { Akun, Profil } = require("../models");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-
+const axios = require("axios");
 // --- REGISTER ---
 exports.register = async (req, res) => {
   try {
@@ -100,5 +100,95 @@ exports.login = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
+  }
+};
+
+exports.googleLogin = async (req, res) => {
+  try {
+    const { access_token } = req.body;
+
+    if (!access_token) {
+      return res.status(400).json({
+        status: "error",
+        message: "Access token Google tidak ditemukan.",
+      });
+    }
+
+    // 1. Ambil data pengguna langsung dari API Google Identity menggunakan access_token
+    const googleResponse = await axios.get(
+      `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${access_token}`,
+    );
+
+    const { email, name, picture } = googleResponse.data;
+
+    // 2. Cek apakah email pengguna sudah terdaftar di tabel Akun
+    let akun = await Akun.findOne({ where: { email } });
+    let profil;
+
+    if (!akun) {
+      // 🚀 JIKA BELUM TERDAFTAR: Otomatis daftarkan akun & profil baru (Auto-Register)
+      // Google Auth tidak memerlukan password manual, kita set null/random aman
+      const salt = await bcrypt.genSalt(10);
+      const fakePassword = await bcrypt.hash(Math.random().toString(36), salt);
+
+      akun = await Akun.create({
+        email: email,
+        kata_sandi: fakePassword,
+      });
+
+      // Hilangkan spasi untuk membuat username standar dari nama Google
+      const cleanUsername = name
+        ? name.replace(/\s+/g, "").toLowerCase()
+        : "user_" + Date.now();
+
+      profil = await Profil.create({
+        id_akun: akun.id_akun,
+        username: cleanUsername,
+        bio: "Masuk menggunakan Akun Google ✨",
+        foto_profil: picture || null, // Menggunakan foto profil dari akun Google
+        total_saldo: 0,
+        level_pengguna: "Newbie",
+        role: "user", // Default role pengguna baru
+      });
+    } else {
+      // 💾 JIKA SUDAH TERDAFTAR: Cukup ambil data profil yang sudah ada dari database
+      profil = await Profil.findOne({ where: { id_akun: akun.id_akun } });
+    }
+
+    // 3. Generate JWT Token internal SkinCycle untuk mengunci sesi login di frontend
+    const token = jwt.sign(
+      {
+        id_akun: akun.id_akun,
+        id_profil: profil?.id_profil,
+        username: profil?.username,
+        role: profil?.role || "user",
+      },
+      process.env.JWT_SECRET || "rahasia_skincycle_2026",
+      { expiresIn: "1d" },
+    );
+
+    // 4. Return data penyelarasan sukses ke frontend React
+    return res.json({
+      status: "success",
+      message: "Login Google berhasil",
+      data: {
+        id_profil: profil?.id_profil,
+        username: profil?.username,
+        email: akun.email,
+        bio: profil?.bio || "",
+        foto_profil: profil?.foto_profil || null,
+        role: profil?.role || "user",
+        total_saldo: profil?.total_saldo || 0,
+        level_pengguna: profil?.level_pengguna || "Newbie",
+        token: token,
+      },
+    });
+  } catch (error) {
+    console.error("Google OAuth Backend Error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Gagal memproses autentikasi Google Server.",
+      error: error.message,
+    });
   }
 };

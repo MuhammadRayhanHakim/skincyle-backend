@@ -1,15 +1,21 @@
 const express = require("express");
 const router = express.Router();
 const profileController = require("../controllers/profileController");
-const upload = require("../middleware/multerConfig");
-router.get("/:id", profileController.getProfile);
+const verifyToken = require("../middleware/authMiddleware");
+const upload = require("../middleware/multerConfig"); // Pustaka konfigurasi penyimpanan gambar Anda
 
-router.put(
-  "/:id",
+router.get("/", verifyToken, profileController.getProfile);
+router.put("/update", verifyToken, profileController.updateProfile);
+router.post(
+  "/upload-photo",
+  verifyToken,
   upload.single("foto_profil"),
-  profileController.updateProfile,
+  profileController.uploadPhotoProfile,
 );
-
-router.delete("/:id/photo", profileController.deletePhotoProfile);
+router.delete(
+  "/delete-photo",
+  verifyToken,
+  profileController.deletePhotoProfile,
+);
 
 module.exports = router;

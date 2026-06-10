@@ -27,6 +27,32 @@ const allowedOrigins = [
   process.env.CLIENT_URL,
 ].filter(Boolean); //
 
+// const allowedOrigins =
+//   process.env.CORS_ORIGIN?.split(",").map((o) => o.trim()) || [];
+
+// app.use(
+//   cors({
+//     origin: (origin, callback) => {
+//       // allow requests tanpa origin contoh: Postman, mobile apps, curl
+//       if (!origin) return callback(null, true);
+
+//       if (allowedOrigins.includes(origin)) {
+//         return callback(null, true);
+//       }
+
+//       return callback(new Error(`CORS blocked: ${origin}`));
+//     },
+
+//     credentials: true,
+
+//     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+
+//     allowedHeaders: ["Content-Type", "Authorization"],
+//   }),
+// );
+
+app.options(/.*/, cors());
+
 app.use(
   cors({
     origin: function (origin, callback) {
