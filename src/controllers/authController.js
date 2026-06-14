@@ -1,7 +1,83 @@
-const { Akun, Profil } = require("../models");
+const { Akun, Profil, Recycle } = require("../models");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const axios = require("axios");
+const { Sequelize } = require("sequelize");
+
+// 🎯 REUSABLE HELPER: Logika Perhitungan 4 Level Dinamis Berdasarkan Berat Asli Admin & Status Selesai
+const dapatkanMetrikSirkular = async (id_profil) => {
+  const beratResult = await Recycle.findOne({
+    attributes: [
+      // 🚀 SINKRONISASI MUTLAK: Menghitung total dari kolom 'berat_asli' yang valid dimasukkan oleh Admin
+      [Sequelize.fn("SUM", Sequelize.col("berat_asli")), "total_berat"],
+    ],
+    where: {
+      id_profil: id_profil,
+      status_jemput: "selesai", // 🔥 KUNCI UTAMA: Sampah pending / belum disetujui tidak akan pernah terhitung
+    },
+    raw: true,
+  });
+
+  // Ambil angka berat murni hasil kalkulasi database (Default 0 jika null)
+  const totalBerat = Math.round(parseFloat(beratResult?.total_berat || 0));
+
+  // ── 🌟 LOGIKA 4 LEVEL BAHASA INDONESIA (TUNAS -> REKREASI TIER LEVEL 1-4) ──
+  let levelPengguna = "Tunas";
+  let teksLevelAngka = "Lv. 1";
+  let targetBerikutnya = 30;
+  let beratMinimalLevelLama = 0;
+
+  if (totalBerat >= 90) {
+    levelPengguna = "Penjaga";
+    teksLevelAngka = "Lv. 4 (Max)";
+    targetBerikutnya = 90;
+    beratMinimalLevelLama = 90;
+  } else if (totalBerat >= 60) {
+    levelPengguna = "Eco";
+    teksLevelAngka = "Lv. 3";
+    targetBerikutnya = 90; // Menuju Penjaga
+    beratMinimalLevelLama = 60;
+  } else if (totalBerat >= 30) {
+    levelPengguna = "Pahlawan Hijau";
+    teksLevelAngka = "Lv. 2";
+    targetBerikutnya = 60; // Menuju Eco
+    beratMinimalLevelLama = 30;
+  } else {
+    levelPengguna = "Tunas";
+    teksLevelAngka = "Lv. 1";
+    targetBerikutnya = 30; // Menuju Pahlawan Hijau memerlukan 30kg
+    beratMinimalLevelLama = 0;
+  }
+
+  // Hitung persentase progress bar di dalam rumpun levelnya secara akurat
+  const selisihBobot = targetBerikutnya - beratMinimalLevelLama;
+  const progressMurni = totalBerat - beratMinimalLevelLama;
+
+  // Pengaman jika total berat masih 0 agar tidak memicu eror Division by Zero (NaN)
+  const persentaseProgress =
+    totalBerat > 0 && selisihBobot > 0
+      ? Math.min(
+          100,
+          Math.max(0, Math.round((progressMurni / selisihBobot) * 100)),
+        )
+      : 0;
+
+  // Ambil saldo paling segar dari tabel Profil untuk disinkronkan ke Forum
+  const profilUser = await Profil.findByPk(id_profil, {
+    attributes: ["total_saldo"],
+  });
+  const saldoAktual = profilUser ? profilUser.total_saldo : 0;
+
+  return {
+    total_berat_kontribusi: totalBerat,
+    persentase_progress: persentaseProgress,
+    level_pengguna: levelPengguna,
+    teks_level_angka: teksLevelAngka,
+    target_berikutnya: targetBerikutnya,
+    total_saldo: saldoAktual,
+  };
+};
+
 // --- REGISTER ---
 exports.register = async (req, res) => {
   try {
@@ -25,10 +101,10 @@ exports.register = async (req, res) => {
     await Profil.create({
       id_akun: akunBaru.id_akun,
       username: username,
-      bio: "", // Default bio kosong
-      foto_profil: null, // Default foto profil belum ada
+      bio: "",
+      foto_profil: null,
       total_saldo: 0,
-      level_pengguna: "Newbie",
+      level_pengguna: "Tunas", // Default awal mendaftar adalah Tunas
       role: "user",
     });
 
@@ -40,15 +116,12 @@ exports.register = async (req, res) => {
   }
 };
 
-// --- LOGIN DENGAN NOTIFIKASI SPESIFIK & SINKRONISASI AVATAR DATA ---
+// --- LOGIN DENGAN SINKRONISASI LEVEL & SALDO UTUH ---
 exports.login = async (req, res) => {
   try {
     const { email, kata_sandi } = req.body;
 
-    // 1. Cek apakah email terdaftar di database
     const user = await Akun.findOne({ where: { email } });
-
-    // JIKA EMAIL TIDAK DITEMUKAN
     if (!user) {
       return res.status(404).json({
         status: "error",
@@ -56,10 +129,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    // 2. Jika email ada, baru cek kecocokan kata sandi
     const isMatch = await bcrypt.compare(kata_sandi, user.kata_sandi);
-
-    // JIKA KATA SANDI SALAH
     if (!isMatch) {
       return res.status(401).json({
         status: "error",
@@ -67,10 +137,24 @@ exports.login = async (req, res) => {
       });
     }
 
-    // 3. Jika semua benar, ambil profil utuh (termasuk foto_profil dan bio dari database)
     const profil = await Profil.findOne({ where: { id_akun: user.id_akun } });
 
-    // Masukkan data dinamis ke dalam Token JWT
+    // 🚀 HITUNG METRIK DAN UPDATE DATABASE PROFILE AGAR SINKRON SEBELUM TOKEN TERBIT
+    let metrikSirkular = {
+      total_berat_kontribusi: 0,
+      persentase_progress: 0,
+      level_pengguna: "Tunas",
+      teks_level_angka: "Lv. 1",
+      target_berikutnya: 30,
+      total_saldo: 0,
+    };
+    if (profil) {
+      metrikSirkular = await dapatkanMetrikSirkular(profil.id_profil);
+
+      // Simpan perubahan level dinamis ke row profil user secara permanen
+      await profil.update({ level_pengguna: metrikSirkular.level_pengguna });
+    }
+
     const token = jwt.sign(
       {
         id_akun: user.id_akun,
@@ -82,7 +166,6 @@ exports.login = async (req, res) => {
       { expiresIn: "1d" },
     );
 
-    // 🚀 RETURN DATA SEGAR: Sertakan foto_profil & bio terbaru hasil update user
     res.json({
       status: "success",
       message: "Login berhasil",
@@ -91,10 +174,14 @@ exports.login = async (req, res) => {
         username: profil?.username,
         email: user.email,
         bio: profil?.bio || "",
-        foto_profil: profil?.foto_profil || null, // 🆕 Kolom ini wajib ikut dikirim!
+        foto_profil: profil?.foto_profil || null,
         role: profil?.role || "user",
-        total_saldo: profil?.total_saldo || 0,
-        level_pengguna: profil?.level_pengguna || "Newbie",
+        total_saldo: metrikSirkular.total_saldo, // Menggunakan saldo aktual terhitung riil dari database profil
+        total_berat_kontribusi: metrikSirkular.total_berat_kontribusi,
+        persentase_progress: metrikSirkular.persentase_progress,
+        level_pengguna: metrikSirkular.level_pengguna,
+        teks_level_angka: metrikSirkular.teks_level_angka,
+        target_berikutnya: metrikSirkular.target_berikutnya,
         token: token,
       },
     });
@@ -103,6 +190,7 @@ exports.login = async (req, res) => {
   }
 };
 
+// --- GOOGLE LOGIN DENGAN SINKRONISASI LEVEL & SALDO UTUH ---
 exports.googleLogin = async (req, res) => {
   try {
     const { access_token } = req.body;
@@ -114,20 +202,16 @@ exports.googleLogin = async (req, res) => {
       });
     }
 
-    // 1. Ambil data pengguna langsung dari API Google Identity menggunakan access_token
     const googleResponse = await axios.get(
       `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${access_token}`,
     );
 
     const { email, name, picture } = googleResponse.data;
 
-    // 2. Cek apakah email pengguna sudah terdaftar di tabel Akun
     let akun = await Akun.findOne({ where: { email } });
     let profil;
 
     if (!akun) {
-      // 🚀 JIKA BELUM TERDAFTAR: Otomatis daftarkan akun & profil baru (Auto-Register)
-      // Google Auth tidak memerlukan password manual, kita set null/random aman
       const salt = await bcrypt.genSalt(10);
       const fakePassword = await bcrypt.hash(Math.random().toString(36), salt);
 
@@ -136,7 +220,6 @@ exports.googleLogin = async (req, res) => {
         kata_sandi: fakePassword,
       });
 
-      // Hilangkan spasi untuk membuat username standar dari nama Google
       const cleanUsername = name
         ? name.replace(/\s+/g, "").toLowerCase()
         : "user_" + Date.now();
@@ -145,17 +228,29 @@ exports.googleLogin = async (req, res) => {
         id_akun: akun.id_akun,
         username: cleanUsername,
         bio: "Masuk menggunakan Akun Google ✨",
-        foto_profil: picture || null, // Menggunakan foto profil dari akun Google
+        foto_profil: picture || null,
         total_saldo: 0,
-        level_pengguna: "Newbie",
-        role: "user", // Default role pengguna baru
+        level_pengguna: "Tunas",
+        role: "user",
       });
     } else {
-      // 💾 JIKA SUDAH TERDAFTAR: Cukup ambil data profil yang sudah ada dari database
       profil = await Profil.findOne({ where: { id_akun: akun.id_akun } });
     }
 
-    // 3. Generate JWT Token internal SkinCycle untuk mengunci sesi login di frontend
+    // 🚀 HITUNG METRIK UNTUK USER GOOGLE AUTH
+    let metrikSirkular = {
+      total_berat_kontribusi: 0,
+      persentase_progress: 0,
+      level_pengguna: "Tunas",
+      teks_level_angka: "Lv. 1",
+      target_berikutnya: 30,
+      total_saldo: 0,
+    };
+    if (profil) {
+      metrikSirkular = await dapatkanMetrikSirkular(profil.id_profil);
+      await profil.update({ level_pengguna: metrikSirkular.level_pengguna });
+    }
+
     const token = jwt.sign(
       {
         id_akun: akun.id_akun,
@@ -167,7 +262,6 @@ exports.googleLogin = async (req, res) => {
       { expiresIn: "1d" },
     );
 
-    // 4. Return data penyelarasan sukses ke frontend React
     return res.json({
       status: "success",
       message: "Login Google berhasil",
@@ -178,8 +272,12 @@ exports.googleLogin = async (req, res) => {
         bio: profil?.bio || "",
         foto_profil: profil?.foto_profil || null,
         role: profil?.role || "user",
-        total_saldo: profil?.total_saldo || 0,
-        level_pengguna: profil?.level_pengguna || "Newbie",
+        total_saldo: metrikSirkular.total_saldo, // Menggunakan saldo aktual terhitung riil dari database profil
+        total_berat_kontribusi: metrikSirkular.total_berat_kontribusi,
+        persentase_progress: metrikSirkular.persentase_progress,
+        level_pengguna: metrikSirkular.level_pengguna,
+        teks_level_angka: metrikSirkular.teks_level_angka,
+        target_berikutnya: metrikSirkular.target_berikutnya,
         token: token,
       },
     });
@@ -191,4 +289,11 @@ exports.googleLogin = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+module.exports = {
+  dapatkanMetrikSirkular,
+  register: exports.register,
+  login: exports.login,
+  googleLogin: exports.googleLogin,
 };

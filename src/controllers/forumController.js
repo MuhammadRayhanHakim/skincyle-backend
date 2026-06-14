@@ -329,11 +329,12 @@ exports.updatePost = async (req, res) => {
   }
 };
 
-// 4. Fitur Like / Upvote + Notifikasi
+// 4. Fitur Like / Upvote + Notifikasi Dinamis
 exports.toggleLike = async (req, res) => {
   try {
     const { id_posting } = req.params;
     const id_profil = req.user.id_profil;
+    const username_pengirim = req.user.username || "Seseorang"; // 🟢 AMBIL USERNAME AKTIF
 
     const post = await Forum.findByPk(id_posting);
     if (!post)
@@ -351,11 +352,13 @@ exports.toggleLike = async (req, res) => {
     await ForumLike.create({ id_posting, id_profil });
 
     if (post.id_profil !== id_profil) {
+      // 🟢 REFACTOR: Menyimpan teks pesan dinamis murni nama pengirim asli ke database
       await Notifikasi.create({
         id_profil_penerima: post.id_profil,
         id_profil_pengirim: id_profil,
         tipe: "like",
         id_posting: id_posting,
+        pesan: `${username_pengirim} menyukai postingan anda`, // 🚀 LOGIKA LIVE FIX
         is_read: false,
       });
     }
@@ -366,27 +369,31 @@ exports.toggleLike = async (req, res) => {
   }
 };
 
-// 5. Tambah Komentar + SMART NOTIFIKASI (Balasan & Mention)
+// 5. Tambah Komentar + SMART NOTIFIKASI (Anti Duplikat Bertingkat)
 exports.addComment = async (req, res) => {
   try {
     const { id_posting } = req.params;
-    const { isi_komentar, anonim } = req.body;
+    const { isi_komentar, anonim, id_komentar_induk } = req.body; // 🟢 TAMBAHKAN: id_komentar_induk dari frontend
     const id_profil_pengirim = req.user.id_profil;
+    const username_pengirim = req.user.username || "Seseorang";
 
     const post = await Forum.findByPk(id_posting);
     if (!post)
       return res.status(404).json({ message: "Postingan tidak ditemukan" });
 
+    // 🟢 REFACTOR: Menyimpan id_komentar_induk ke database agar struktur pohon komentar terkunci kaku
     const komentarBaru = await Komentar.create({
       id_posting: id_posting,
       id_profil: id_profil_pengirim,
       isi_komentar: isi_komentar,
       anonim: anonim || false,
+      id_komentar_induk: id_komentar_induk || null, // Nilai foreign key ke tabel komentar itu sendiri
     });
 
     const mentionMatch = isi_komentar.match(/@(\w+)/);
     let targetPenerima = post.id_profil;
     let tipeNotif = "komentar";
+    let teksPesanNotif = `${username_pengirim} mengomentari postingan anda`;
 
     if (mentionMatch) {
       const usernameTarget = mentionMatch[1];
@@ -396,6 +403,7 @@ exports.addComment = async (req, res) => {
       if (profilTarget) {
         targetPenerima = profilTarget.id_profil;
         tipeNotif = "balasan";
+        teksPesanNotif = `${username_pengirim} membalas komentar anda`;
       }
     }
 
@@ -406,6 +414,7 @@ exports.addComment = async (req, res) => {
         tipe: tipeNotif,
         id_posting: id_posting,
         id_komentar: komentarBaru.id_komentar,
+        pesan: teksPesanNotif,
         is_read: false,
       });
     }
@@ -462,6 +471,43 @@ exports.deletePost = async (req, res) => {
 
     await post.destroy();
     res.json({ status: "success", message: "Postingan berhasil dihapus" });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+};
+
+exports.getUserCommunityImpact = async (req, res) => {
+  try {
+    const id_profil_user = req.user.id_profil;
+
+    // 1. Ambil ID semua postingan milik user
+    const myPosts = await Forum.findAll({
+      where: { id_profil: id_profil_user },
+      attributes: ["id_posting"],
+    });
+    const postIds = myPosts.map((post) => post.id_posting);
+
+    if (postIds.length === 0) {
+      return res.json({
+        status: "success",
+        data: { totalThreads: 0, totalUpvotes: 0 },
+      });
+    }
+
+    // 2. Hitung jumlah komentar dari orang lain di postingan user
+    const totalThreads = await Komentar.count({
+      where: {
+        id_posting: { [Op.in]: postIds },
+        id_profil: { [Op.ne]: id_profil_user }, // Hanya hitung komentar user lain
+      },
+    });
+
+    // 3. Hitung jumlah likes di postingan user
+    const totalUpvotes = await ForumLike.count({
+      where: { id_posting: { [Op.in]: postIds } },
+    });
+
+    res.json({ status: "success", data: { totalThreads, totalUpvotes } });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }

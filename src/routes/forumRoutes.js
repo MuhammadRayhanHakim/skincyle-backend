@@ -63,5 +63,10 @@ router.put("/:id_posting", upload.single("media"), forumController.updatePost);
 router.delete("/:id_posting", forumController.deletePost); // <--- Duplikasi baris di bagian bawah sudah dihapus
 router.post("/comment/:id_posting", forumController.addComment);
 router.post("/like/:id_posting", forumController.toggleLike);
-
+// Di forumRoutes.js
+router.get(
+  "/profil/dampak-komunitas",
+  authMiddleware,
+  forumController.getUserCommunityImpact,
+);
 module.exports = router;

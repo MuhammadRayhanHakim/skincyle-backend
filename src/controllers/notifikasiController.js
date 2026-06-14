@@ -1,20 +1,28 @@
 const { Notifikasi, Profil } = require("../models");
 
-// 1. Ambil semua notifikasi untuk user yang login
 exports.getNotifikasi = async (req, res) => {
   try {
     const id_profil = req.user.id_profil;
+
     const data = await Notifikasi.findAll({
       where: { id_profil_penerima: id_profil },
-      include: [{ model: Profil, as: "pengirim", attributes: ["username"] }],
+      // 🟢 FIX MUTLAK RELASI: Memaksa pencarian join profil pengirim berdasarkan id_profil_pengirim secara eksplisit
+      include: [
+        {
+          model: Profil,
+          as: "pengirim",
+          foreignKey: "id_profil_pengirim", // Mengunci foreign key agar tidak tertukar ke admin
+          attributes: ["username", "foto_profil"],
+        },
+      ],
       order: [["tanggal", "DESC"]],
     });
+
     res.json({ status: "success", data });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
 };
-
 // 2. Hitung jumlah notifikasi yang belum dibaca
 exports.getUnreadCount = async (req, res) => {
   try {
